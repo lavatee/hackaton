@@ -1,0 +1,44 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upload</title>
+    <style>
+        #drop-zone {
+            width: 300px;
+            height: 200px;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        #drop-zone.highlight {
+            border-color: #4CAF50;
+            background-color: #f0fff0;
+        }
+        #status {
+            text-align: center;
+            margin-top: 10px;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center;">Drag & Drop Image Upload</h1>
+
+    <div id="drop-zone">
+        <p>Перетащите изображение сюда или кликните для выбора</p>
+        <input type="file" id="file-input" accept="image/*" style="display: none;">
+    </div>
+
+    <div id="status"></div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
