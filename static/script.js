@@ -1,8 +1,9 @@
-
 document.addEventListener('DOMContentLoaded', function() {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
-    const statusDiv = document.getElementById('status');
+    const processingList = document.getElementById('processing-list');
+    const uploadQueue = [];
+    let isProcessing = false;
 
     dropZone.addEventListener('click', function() {
         fileInput.click();
@@ -10,8 +11,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     fileInput.addEventListener('change', function(e) {
         if (e.target.files.length) {
-            uploadFile(e.target.files[0]);
+            handleFiles(e.target.files);
         }
+        this.value = '';
     });
 
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -41,36 +43,122 @@ document.addEventListener('DOMContentLoaded', function() {
 
     dropZone.addEventListener('drop', function(e) {
         const dt = e.dataTransfer;
-        const file = dt.files[0];
+        const files = dt.files;
 
-        if (file) {
-            uploadFile(file);
+        if (files.length) {
+            handleFiles(files);
         }
     });
 
-    function uploadFile(file) {
-        statusDiv.textContent = 'Загрузка...';
-
-        const formData = new FormData();
-        formData.append('file', file);
-
-        fetch('/upload', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                statusDiv.textContent = 'Ошибка: ' + data.error;
-                statusDiv.style.color = 'red';
-            } else {
-                statusDiv.textContent = 'Файл успешно загружен: ' + data.info;
-                statusDiv.style.color = 'green';
+    function handleFiles(files) {
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            
+            if (!file.type.match('image.*')) {
+                continue;
             }
-        })
-        .catch(error => {
-            statusDiv.textContent = 'Ошибка: ' + error;
-            statusDiv.style.color = 'red';
-        });
+
+            const listItem = createListItem(file.name);
+            uploadQueue.push({
+                file: file,
+                listItem: listItem
+            });
+
+            processingList.appendChild(listItem);
+        }
+
+        if (!isProcessing) {
+            processQueue();
+        }
+    }
+
+    function createListItem(filename) {
+        const li = document.createElement('li');
+        li.className = 'processing-item';
+        
+        const fileNameSpan = document.createElement('span');
+        fileNameSpan.className = 'file-name';
+        fileNameSpan.textContent = filename;
+        
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'status';
+        statusSpan.textContent = 'В очереди';
+        
+        const checkSpan = document.createElement('span');
+        checkSpan.className = 'check-status';
+        checkSpan.textContent = 'Не соответствует';
+        
+        const spinner = document.createElement('div');
+        spinner.className = 'spinner';
+        
+        li.appendChild(spinner);
+        li.appendChild(fileNameSpan);
+        li.appendChild(document.createTextNode(' - '));
+        li.appendChild(statusSpan);
+        li.appendChild(document.createTextNode(' | '));
+        li.appendChild(checkSpan);
+        
+        return li;
+    }
+
+    function updateListItemStatus(listItem, status, isSuccess = false) {
+        const statusSpan = listItem.querySelector('.status');
+        statusSpan.textContent = status;
+        
+        if (status === 'Обрабатывается...') {
+            listItem.classList.add('processing');
+            listItem.classList.remove('success', 'error');
+        } else if (status === 'Готово') {
+            listItem.classList.remove('processing', 'error');
+            listItem.classList.add('success');
+        } else if (status === 'Ошибка') {
+            listItem.classList.remove('processing', 'success');
+            listItem.classList.add('error');
+        }
+    }
+
+    async function processQueue() {
+        if (uploadQueue.length === 0) {
+            isProcessing = false;
+            return;
+        }
+
+        isProcessing = true;
+        const item = uploadQueue.shift();
+        
+        updateListItemStatus(item.listItem, 'Обрабатывается...');
+        
+        try {
+            const formData = new FormData();
+            formData.append('file', item.file);
+
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            console.log(data.info);
+            const info = JSON.parse(data.info); // тут молимся чтобы было без ```json
+            
+            if (data.success) {
+                updateListItemStatus(item.listItem, 'Готово', true);
+                
+                const checkStatusSpan = item.listItem.querySelector('.check-status');
+                checkStatusSpan.textContent = info.verdict ? 'Соответствует' : 'Не соответствует';
+                
+            } else {
+                updateListItemStatus(item.listItem, 'Ошибка');
+                const checkStatusSpan = item.listItem.querySelector('.check-status');
+                checkStatusSpan.textContent = data.error || 'Ошибка загрузки';
+            }
+            
+        } catch (error) {
+            updateListItemStatus(item.listItem, 'Ошибка');
+            const checkStatusSpan = item.listItem.querySelector('.check-status');
+            checkStatusSpan.textContent = 'Ошибка сети';
+        }
+        
+        setTimeout(() => processQueue(), 100);
     }
 });
