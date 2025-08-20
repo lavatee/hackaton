@@ -2,5 +2,5 @@
 
 ```
 docker build -t hackathon-savely .
-docker run --rm -it -p 5000:5000 hackathon-savely
+docker run --rm -it -p 5000:5000 -e OPENROUTER_TOKEN=token hackathon-savely
 ```

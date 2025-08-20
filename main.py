@@ -82,7 +82,7 @@ def upload_file():
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
             headers={
-                "Authorization": "Bearer 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",
+                "Authorization": "Bearer " + os.environ["OPENROUTER_TOKEN"],
                 "Content-Type": "application/json"
             },
             data=json.dumps({
