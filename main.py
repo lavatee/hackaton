@@ -5,6 +5,7 @@ import requests
 import time
 import json
 import os
+import re
 
 with open("requirements_for_product.json", "r", encoding="utf-8") as f:
     WHO_REQS = f.read()
@@ -97,8 +98,7 @@ def upload_file():
 
             print(f"deepseek took {time.time() - start_time}s")
             info = response.json()["choices"][0]["message"]["content"]
-
-            matches_rules = False  # TODO
+            info = re.search(r"{[\s\S]+}", info).group()  # чудесным образом вычленяем json
 
             return jsonify({
                 "success": True,
