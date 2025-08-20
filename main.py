@@ -27,7 +27,13 @@ def upload_file():
 
     if file and allowed_file(file.filename):
         img = Image.open(file)
-        text = pytesseract.image_to_string(img, lang="rus")
+
+        # somehow this improves the ocr accuracy
+        img = img.resize((img.size[0] * 2, img.size[1] * 2), Image.LANCZOS)
+
+        # --oem 2 = 2 = Tesseract + LSTM.
+        # --psm 12 = Sparse text with OSD.
+        text = pytesseract.image_to_string(img, config="--oem 2 --psm 12", lang="rus")
 
         return jsonify({"info": text}), 200
     else:
