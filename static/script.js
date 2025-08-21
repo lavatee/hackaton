@@ -184,19 +184,20 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             const data = await response.json();
+            console.log(data.text);
+            const info = JSON.parse(data.text); // тут молимся чтобы было без ```json
 
             if (data.success) {
                 updateTableRowStatus(item.tableRow, 'Готово', true);
 
                 const checkSpan = item.tableRow.querySelector('td:last-child span');
-                if (data.matches_rules) {
+                if (info.verdict) {
                     checkSpan.className = 'check-matched';
                     checkSpan.textContent = 'Соответствует';
                 } else {
                     checkSpan.className = 'check-not-matched';
                     checkSpan.textContent = 'Не соответствует';
                 }
-
             } else {
                 updateTableRowStatus(item.tableRow, 'Ошибка');
                 const checkSpan = item.tableRow.querySelector('td:last-child span');

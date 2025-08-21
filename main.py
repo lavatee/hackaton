@@ -48,7 +48,6 @@ percent_of_daily_norm это процент белков/жиров/углево
 критерии пиши на русском
 """
 
-
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
 app = Flask(__name__)
 
@@ -104,13 +103,10 @@ def upload_file():
             info = response.json()["choices"][0]["message"]["content"]
             info = re.search(r"{[\s\S]+}", info).group()  # чудесным образом вычленяем json
 
-            matches_rules = False
-
             return jsonify({
                 "success": True,
                 "filename": file.filename,
-                "text": info,
-                "matches_rules": matches_rules
+                "text": info
             }), 200
 
         except Exception as e:
