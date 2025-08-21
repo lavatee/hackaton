@@ -136,8 +136,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const checkTd = document.createElement('td');
         const checkSpan = document.createElement('span');
-        checkSpan.className = 'check-not-matched';
-        checkSpan.textContent = 'Не соответствует';
+        checkSpan.className = 'check-pending';
+        checkSpan.textContent = 'Идёт проверка...';
         checkTd.appendChild(checkSpan);
 
         tr.appendChild(fileNameTd);
@@ -152,41 +152,58 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         return tr;
+}
+
+function updateTableRowStatus(tableRow, status, isSuccess = false) {
+    const statusCell = tableRow.querySelector('.status-cell');
+    const statusSpan = statusCell.querySelector('span');
+    const spinner = statusCell.querySelector('.spinner');
+    const checkSpan = tableRow.querySelector('.check-pending, .check-matched, .check-not-matched');
+
+    statusSpan.className = '';
+    tableRow.className = '';
+
+    switch(status) {
+        case 'В очереди':
+            statusSpan.className = 'status-queued';
+            tableRow.className = 'queued';
+            spinner.style.opacity = '0';
+            if (checkSpan) {
+                checkSpan.className = 'check-pending';
+                checkSpan.textContent = 'В очереди';
+            }
+            break;
+        case 'Обрабатывается...':
+            statusSpan.className = 'status-processing';
+            tableRow.className = 'processing';
+            spinner.style.opacity = '1';
+            if (checkSpan) {
+                checkSpan.className = 'check-pending';
+                checkSpan.textContent = 'Идёт проверка...';
+            }
+            break;
+        case 'Готово':
+            statusSpan.className = 'status-success';
+            tableRow.className = 'success';
+            spinner.style.opacity = '0';
+            if (checkSpan && isSuccess !== undefined) {
+                checkSpan.className = isSuccess ? 'check-matched' : 'check-not-matched';
+                checkSpan.textContent = isSuccess ? 'Соответствует' : 'Не соответствует';
+            }
+            break;
+        case 'Ошибка':
+            statusSpan.className = 'status-error';
+            tableRow.className = 'error';
+            spinner.style.opacity = '0';
+            if (checkSpan) {
+                checkSpan.className = 'check-not-matched';
+                checkSpan.textContent = 'Ошибка проверки';
+            }
+            break;
     }
 
-    function updateTableRowStatus(tableRow, status, isSuccess = false) {
-        const statusCell = tableRow.querySelector('.status-cell');
-        const statusSpan = statusCell.querySelector('span');
-        const spinner = statusCell.querySelector('.spinner');
-
-        statusSpan.className = '';
-        tableRow.className = '';
-
-        switch(status) {
-            case 'В очереди':
-                statusSpan.className = 'status-queued';
-                tableRow.className = 'queued';
-                spinner.style.opacity = '0';
-                break;
-            case 'Обрабатывается...':
-                statusSpan.className = 'status-processing';
-                tableRow.className = 'processing';
-                spinner.style.opacity = '1';
-                break;
-            case 'Готово':
-                statusSpan.className = 'status-success';
-                tableRow.className = 'success';
-                spinner.style.opacity = '0';
-                break;
-            case 'Ошибка':
-                statusSpan.className = 'status-error';
-                tableRow.className = 'error';
-                spinner.style.opacity = '0';
-                break;
-        }
-
-        statusSpan.textContent = status;
-    }
+    statusSpan.textContent = status;
+}
 
     function showModal(info) {
         const modalBody = document.getElementById('modal-body');
