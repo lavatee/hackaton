@@ -56,6 +56,51 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+# there's probably some built-in decorator like this
+def exectime(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        retval = func(*args, **kwargs)
+        print(f"{func.__name__} took {time.time() - start_time}s")
+        return retval
+
+    return wrapper
+
+
+@exectime
+def preprocess(file):
+    img = Image.open(file)
+    img = img.resize((img.size[0] * 2, img.size[1] * 2), Image.LANCZOS)  # somehow this improves the ocr accuracy
+    return img
+
+
+@exectime
+def ocr(img):
+    # --oem 2 = Tesseract + LSTM.
+    # --psm 12 = Sparse text with OSD.
+    return pytesseract.image_to_string(img, config="--oem 2 --psm 12", lang="rus")
+
+
+@exectime
+def ai_prompt(text):
+    return requests.post(
+        url="https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": "Bearer " + os.environ["OPENROUTER_TOKEN"],
+            "Content-Type": "application/json"
+        },
+        data=json.dumps({
+            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": PROMPT.replace("%text%", text)
+                }
+            ]
+        })
+    )
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -72,34 +117,8 @@ def upload_file():
 
     if file and allowed_file(file.filename):
         try:
-            img = Image.open(file)
+            response = ai_prompt(ocr(preprocess(file)))
 
-            # somehow this improves the ocr accuracy
-            img = img.resize((img.size[0] * 2, img.size[1] * 2), Image.LANCZOS)
-
-            # --oem 2 = 2 = Tesseract + LSTM.
-            # --psm 12 = Sparse text with OSD.
-            text = pytesseract.image_to_string(img, config="--oem 2 --psm 12", lang="rus")
-
-            start_time = time.time()
-            response = requests.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": "Bearer " + os.environ["OPENROUTER_TOKEN"],
-                    "Content-Type": "application/json"
-                },
-                data=json.dumps({
-                    "model": "meta-llama/llama-3.3-70b-instruct:free",
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": PROMPT.replace("%text%", text)
-                        }
-                    ]
-                })
-            )
-
-            print(f"ai prompt took {time.time() - start_time}s")
             print(response.text)
             info = response.json()["choices"][0]["message"]["content"]
             info = re.search(r"{[\s\S]+}", info).group()  # чудесным образом вычленяем json
