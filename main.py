@@ -91,7 +91,7 @@ def upload_file():
                     "Content-Type": "application/json"
                 },
                 data=json.dumps({
-                    "model": "deepseek/deepseek-r1-distill-llama-70b:free",
+                    "model": os.environ["OPENROUTER_MODEL"],
                     "messages": [
                         {
                             "role": "user",
