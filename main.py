@@ -89,7 +89,7 @@ def upload_file():
                     "Content-Type": "application/json"
                 },
                 data=json.dumps({
-                    "model": "deepseek/deepseek-r1-0528-qwen3-8b:free",
+                    "model": "meta-llama/llama-3.3-70b-instruct:free",
                     "messages": [
                         {
                             "role": "user",
@@ -99,7 +99,8 @@ def upload_file():
                 })
             )
 
-            print(f"deepseek took {time.time() - start_time}s")
+            print(f"ai prompt took {time.time() - start_time}s")
+            print(response.text)
             info = response.json()["choices"][0]["message"]["content"]
             info = re.search(r"{[\s\S]+}", info).group()  # чудесным образом вычленяем json
 
