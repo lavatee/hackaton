@@ -170,3 +170,31 @@ input[type="file"] {
     font-style: italic;
     padding: 30px;
 }
+
+.processing-table tr {
+    transition: all 0.3s ease;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.processing-table tr:hover {
+    background-color: #f8f9fa !important;
+}
+
+.processing-table tr.success:hover {
+    background-color: #d1e7dd !important;
+}
+
+.processing-table tr.error:hover {
+    background-color: #f1aeb5 !important;
+}

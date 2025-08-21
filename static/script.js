@@ -55,6 +55,9 @@ document.addEventListener('DOMContentLoaded', function() {
             processingTableBody.innerHTML = '';
         }
 
+        const fragment = document.createDocumentFragment();
+        const newItems = [];
+
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
 
@@ -63,13 +66,25 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const tableRow = createTableRow(file.name);
-            uploadQueue.push({
+            newItems.push({
                 file: file,
                 tableRow: tableRow
             });
 
-            processingTableBody.appendChild(tableRow);
+            if (fragment.firstChild) {
+                fragment.insertBefore(tableRow, fragment.firstChild);
+            } else {
+                fragment.appendChild(tableRow);
+            }
         }
+
+        if (processingTableBody.firstChild) {
+            processingTableBody.insertBefore(fragment, processingTableBody.firstChild);
+        } else {
+            processingTableBody.appendChild(fragment);
+        }
+
+        uploadQueue.unshift(...newItems);
 
         if (!isProcessing) {
             processQueue();
@@ -155,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         isProcessing = true;
-        const item = uploadQueue.shift();
+        const item = uploadQueue.pop();
 
         updateTableRowStatus(item.tableRow, 'Обрабатывается...');
 
