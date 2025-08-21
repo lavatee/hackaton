@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, jsonify
 from PIL import Image
 import pytesseract
 import requests
+import hashlib
+import redis
 import time
 import json
 import os
@@ -51,6 +53,7 @@ percent_of_daily_norm это процент белков/жиров/углево
 """
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
+cache = redis.Redis(host="redis", port=6379, db=0, decode_responses=True)
 app = Flask(__name__)
 
 
@@ -67,6 +70,16 @@ def exectime(func):
         return retval
 
     return wrapper
+
+
+@exectime
+def hash_file(file):
+    sha256 = hashlib.sha256()
+
+    for chunk in iter(lambda: file.read(4096), b""):
+        sha256.update(chunk)
+
+    return sha256.hexdigest()
 
 
 @exectime
@@ -119,11 +132,16 @@ def upload_file():
 
     if file and allowed_file(file.filename):
         try:
-            response = ai_prompt(ocr(preprocess(file)))
+            sha256 = hash_file(file)
+            info = cache.get(sha256)
 
-            print(response.text)
-            info = response.json()["choices"][0]["message"]["content"]
-            info = re.search(r"{[\s\S]+}", info).group()  # чудесным образом вычленяем json
+            if info is None:
+                response = ai_prompt(ocr(preprocess(file)))
+
+                print(response.text)
+                info = response.json()["choices"][0]["message"]["content"]
+                info = re.search(r"{[\s\S]+}", info).group()  # чудесным образом вычленяем json
+                cache.set(sha256, info)
 
             return jsonify({
                 "success": True,
