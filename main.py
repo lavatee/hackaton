@@ -1,7 +1,53 @@
 from flask import Flask, render_template, request, jsonify
 from PIL import Image
 import pytesseract
+import requests
 import time
+import json
+import os
+import re
+
+with open("requirements_for_product.json", "r", encoding="utf-8") as f:
+    WHO_REQS = f.read()
+
+PROMPT = f"""
+проанализируй продукт согласно требованиям ВОЗ:
+{WHO_REQS}
+
+текст на упаковке:
+%text%
+
+выведи в формате json типа
+{{
+    "verdict": true если продукт в целом хороший, иначе false,
+    "category": "только код категории",
+    "g_per_100g": {{
+        "proteins": 12,
+        "fats": 45,
+        "carbohydrates": 78
+    }},
+    "percent_of_daily_norm": {{
+        "proteins": 12,
+        "fats": 34,
+        "carbohydrates": 56
+    }},
+    "requirements": [
+        {{
+            "criterion": "...",
+            "verdict": true если всё хорошо, иначе false
+        }},
+        ...
+    ]
+}}
+
+только json, без комментариев, без markdown, без "```"
+категорию в виде строки (в кавычках)
+g_per_100g это граммы белков/жиров/углеводов на 100г продукта
+percent_of_daily_norm это процент белков/жиров/углеводов от суточной нормы
+в requirements укажи как выполненые так и невыполненые требования
+критерии пиши на русском
+"""
+
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
 app = Flask(__name__)
@@ -33,16 +79,34 @@ def upload_file():
             # --psm 12 = Sparse text with OSD.
             text = pytesseract.image_to_string(img, config="--oem 2 --psm 12", lang="rus")
 
-            # Имитация обработки для демонстрации
-            time.sleep(1)
+            start_time = time.time()
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": "Bearer " + os.environ["OPENROUTER_TOKEN"],
+                    "Content-Type": "application/json"
+                },
+                data=json.dumps({
+                    "model": "deepseek/deepseek-r1-0528-qwen3-8b:free",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": PROMPT.replace("%text%", text)
+                        }
+                    ]
+                })
+            )
 
-            # Тут нужно сделать проверку соответствия ВОЗ
+            print(f"deepseek took {time.time() - start_time}s")
+            info = response.json()["choices"][0]["message"]["content"]
+            info = re.search(r"{[\s\S]+}", info).group()  # чудесным образом вычленяем json
+
             matches_rules = False
 
             return jsonify({
                 "success": True,
                 "filename": file.filename,
-                "text": text,
+                "text": info,
                 "matches_rules": matches_rules
             }), 200
 
