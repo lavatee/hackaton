@@ -46,6 +46,8 @@ g_per_100g это граммы белков/жиров/углеводов на 1
 percent_of_daily_norm это процент белков/жиров/углеводов от суточной нормы
 в requirements укажи как выполненые так и невыполненые требования
 критерии пиши на русском
+не забывай в строковых значениях ставить обратный слеш перед кавычками
+этот вывод будет парситься через JSON.parse, важно чтобы не получилась ошибка
 """
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
@@ -90,7 +92,7 @@ def ai_prompt(text):
             "Content-Type": "application/json"
         },
         data=json.dumps({
-            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "model": "deepseek/deepseek-r1-distill-llama-70b:free",
             "messages": [
                 {
                     "role": "user",
