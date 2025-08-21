@@ -14,8 +14,21 @@
         <input type="file" id="file-input" accept="image/*" multiple>
     </div>
 
-    <h2>Список обработки</h2>
-    <ul id="processing-list"></ul>
+    <h2>Таблица обработки</h2>
+    <table class="processing-table">
+        <thead>
+            <tr>
+                <th style="width: 40%;">Название файла</th>
+                <th style="width: 30%;">Статус обработки</th>
+                <th style="width: 30%;">Соответствие правилам ВОЗ</th>
+            </tr>
+        </thead>
+        <tbody id="processing-table-body">
+            <tr>
+                <td colspan="3" class="empty-table-message">Файлы не добавлены</td>
+            </tr>
+        </tbody>
+    </table>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>

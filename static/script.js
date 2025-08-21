@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
-    const processingList = document.getElementById('processing-list');
+    const processingTableBody = document.getElementById('processing-table-body');
     const uploadQueue = [];
     let isProcessing = false;
 
@@ -51,20 +51,24 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function handleFiles(files) {
+        if (processingTableBody.querySelector('.empty-table-message')) {
+            processingTableBody.innerHTML = '';
+        }
+
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            
+
             if (!file.type.match('image.*')) {
                 continue;
             }
 
-            const listItem = createListItem(file.name);
+            const tableRow = createTableRow(file.name);
             uploadQueue.push({
                 file: file,
-                listItem: listItem
+                tableRow: tableRow
             });
 
-            processingList.appendChild(listItem);
+            processingTableBody.appendChild(tableRow);
         }
 
         if (!isProcessing) {
@@ -72,62 +76,89 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function createListItem(filename) {
-        const li = document.createElement('li');
-        li.className = 'processing-item';
-        
+    function createTableRow(filename) {
+        const tr = document.createElement('tr');
+        tr.className = 'queued';
+
+        const fileNameTd = document.createElement('td');
+        fileNameTd.className = 'file-name-cell';
         const fileNameSpan = document.createElement('span');
         fileNameSpan.className = 'file-name';
         fileNameSpan.textContent = filename;
-        
-        const statusSpan = document.createElement('span');
-        statusSpan.className = 'status';
-        statusSpan.textContent = 'В очереди';
-        
-        const checkSpan = document.createElement('span');
-        checkSpan.className = 'check-status';
-        checkSpan.textContent = 'Не соответствует';
-        
+        fileNameTd.appendChild(fileNameSpan);
+
+        const statusTd = document.createElement('td');
+        statusTd.className = 'status-cell';
         const spinner = document.createElement('div');
         spinner.className = 'spinner';
-        
-        li.appendChild(spinner);
-        li.appendChild(fileNameSpan);
-        li.appendChild(document.createTextNode(' - '));
-        li.appendChild(statusSpan);
-        li.appendChild(document.createTextNode(' | '));
-        li.appendChild(checkSpan);
-        
-        return li;
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'status-queued';
+        statusSpan.textContent = 'В очереди';
+        statusTd.appendChild(spinner);
+        statusTd.appendChild(statusSpan);
+
+        const checkTd = document.createElement('td');
+        const checkSpan = document.createElement('span');
+        checkSpan.className = 'check-not-matched';
+        checkSpan.textContent = 'Не соответствует';
+        checkTd.appendChild(checkSpan);
+
+        tr.appendChild(fileNameTd);
+        tr.appendChild(statusTd);
+        tr.appendChild(checkTd);
+
+        return tr;
     }
 
-    function updateListItemStatus(listItem, status, isSuccess = false) {
-        const statusSpan = listItem.querySelector('.status');
-        statusSpan.textContent = status;
-        
-        if (status === 'Обрабатывается...') {
-            listItem.classList.add('processing');
-            listItem.classList.remove('success', 'error');
-        } else if (status === 'Готово') {
-            listItem.classList.remove('processing', 'error');
-            listItem.classList.add('success');
-        } else if (status === 'Ошибка') {
-            listItem.classList.remove('processing', 'success');
-            listItem.classList.add('error');
+    function updateTableRowStatus(tableRow, status, isSuccess = false) {
+        const statusCell = tableRow.querySelector('.status-cell');
+        const statusSpan = statusCell.querySelector('span');
+        const spinner = statusCell.querySelector('.spinner');
+
+        statusSpan.className = '';
+        tableRow.className = '';
+
+        switch(status) {
+            case 'В очереди':
+                statusSpan.className = 'status-queued';
+                tableRow.className = 'queued';
+                spinner.style.opacity = '0';
+                break;
+            case 'Обрабатывается...':
+                statusSpan.className = 'status-processing';
+                tableRow.className = 'processing';
+                spinner.style.opacity = '1';
+                break;
+            case 'Готово':
+                statusSpan.className = 'status-success';
+                tableRow.className = 'success';
+                spinner.style.opacity = '0';
+                break;
+            case 'Ошибка':
+                statusSpan.className = 'status-error';
+                tableRow.className = 'error';
+                spinner.style.opacity = '0';
+                break;
         }
+
+        statusSpan.textContent = status;
     }
 
     async function processQueue() {
         if (uploadQueue.length === 0) {
             isProcessing = false;
+
+            if (processingTableBody.children.length === 0) {
+                processingTableBody.innerHTML = '<tr><td colspan="3" class="empty-table-message">Файлы не добавлены</td></tr>';
+            }
             return;
         }
 
         isProcessing = true;
         const item = uploadQueue.shift();
-        
-        updateListItemStatus(item.listItem, 'Обрабатывается...');
-        
+
+        updateTableRowStatus(item.tableRow, 'Обрабатывается...');
+
         try {
             const formData = new FormData();
             formData.append('file', item.file);
@@ -136,27 +167,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 method: 'POST',
                 body: formData
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
-                updateListItemStatus(item.listItem, 'Готово', true);
-                
-                const checkStatusSpan = item.listItem.querySelector('.check-status');
-                checkStatusSpan.textContent = data.matches_rules ? 'Соответствует' : 'Не соответствует';
-                
+                updateTableRowStatus(item.tableRow, 'Готово', true);
+
+                const checkSpan = item.tableRow.querySelector('td:last-child span');
+                if (data.matches_rules) {
+                    checkSpan.className = 'check-matched';
+                    checkSpan.textContent = 'Соответствует';
+                } else {
+                    checkSpan.className = 'check-not-matched';
+                    checkSpan.textContent = 'Не соответствует';
+                }
+
             } else {
-                updateListItemStatus(item.listItem, 'Ошибка');
-                const checkStatusSpan = item.listItem.querySelector('.check-status');
-                checkStatusSpan.textContent = data.error || 'Ошибка загрузки';
+                updateTableRowStatus(item.tableRow, 'Ошибка');
+                const checkSpan = item.tableRow.querySelector('td:last-child span');
+                checkSpan.className = 'check-not-matched';
+                checkSpan.textContent = data.error || 'Ошибка загрузки';
             }
-            
+
         } catch (error) {
-            updateListItemStatus(item.listItem, 'Ошибка');
-            const checkStatusSpan = item.listItem.querySelector('.check-status');
-            checkStatusSpan.textContent = 'Ошибка сети';
+            updateTableRowStatus(item.tableRow, 'Ошибка');
+            const checkSpan = item.tableRow.querySelector('td:last-child span');
+            checkSpan.className = 'check-not-matched';
+            checkSpan.textContent = 'Ошибка сети';
         }
-        
+
         setTimeout(() => processQueue(), 100);
     }
 });
