@@ -7,29 +7,29 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <h1>Drag & Drop Image Upload</h1>
+<h1>Drag & Drop Image Upload</h1>
 
-    <div id="drop-zone">
-        <p>Перетащите изображения сюда или кликните для выбора</p>
-        <input type="file" id="file-input" accept="image/*" multiple>
-    </div>
+<div id="drop-zone">
+    <p>Перетащите изображения сюда или кликните для выбора</p>
+    <input type="file" id="file-input" accept="image/*" multiple>
+</div>
 
-    <h2>Таблица обработки</h2>
-    <table class="processing-table">
-        <thead>
-            <tr>
-                <th style="width: 40%;">Название файла</th>
-                <th style="width: 30%;">Статус обработки</th>
-                <th style="width: 30%;">Соответствие правилам ВОЗ</th>
-            </tr>
-        </thead>
-        <tbody id="processing-table-body">
-            <tr>
-                <td colspan="3" class="empty-table-message">Файлы не добавлены</td>
-            </tr>
-        </tbody>
-    </table>
+<h2>Таблица обработки</h2>
+<table class="processing-table">
+    <thead>
+    <tr>
+        <th style="width: 40%;">Название файла</th>
+        <th style="width: 30%;">Статус обработки</th>
+        <th style="width: 30%;">Соответствие правилам ВОЗ</th>
+    </tr>
+    </thead>
+    <tbody id="processing-table-body">
+    <tr>
+        <td colspan="3" class="empty-table-message">Файлы не добавлены</td>
+    </tr>
+    </tbody>
+</table>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
