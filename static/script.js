@@ -5,6 +5,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const uploadQueue = [];
     let isProcessing = false;
 
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>Детальная информация</h3>
+            <div id="modal-body"></div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector('.close');
+    closeBtn.onclick = function() {
+        modal.style.display = 'none';
+    };
+
+    modal.onclick = function(event) {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    };
+
     dropZone.addEventListener('click', function() {
         fileInput.click();
     });
@@ -122,6 +144,13 @@ document.addEventListener('DOMContentLoaded', function() {
         tr.appendChild(statusTd);
         tr.appendChild(checkTd);
 
+        tr.addEventListener('click', function() {
+            const info = this.dataset.info;
+            if (info) {
+                showModal(JSON.parse(info));
+            }
+        });
+
         return tr;
     }
 
@@ -159,6 +188,56 @@ document.addEventListener('DOMContentLoaded', function() {
         statusSpan.textContent = status;
     }
 
+    function showModal(info) {
+        const modalBody = document.getElementById('modal-body');
+
+        let html = `
+            <div class="modal-section">
+                <h4>Общий вердикт: ${info.verdict ? '✅ Соответствует' : '❌ Не соответствует'}</h4>
+                <p><strong>Категория:</strong> ${info.category}</p>
+            </div>
+
+            <div class="modal-section">
+                <h4>Пищевая ценность на 100г:</h4>
+                <table class="nutrition-table">
+                    <tr><th>Белки</th><td>${info.g_per_100g.proteins}g</td></tr>
+                    <tr><th>Жиры</th><td>${info.g_per_100g.fats}g</td></tr>
+                    <tr><th>Углеводы</th><td>${info.g_per_100g.carbohydrates}g</td></tr>
+                </table>
+            </div>
+
+            <div class="modal-section">
+                <h4>Процент от суточной нормы:</h4>
+                <table class="nutrition-table">
+                    <tr><th>Белки</th><td>${info.percent_of_daily_norm.proteins}%</td></tr>
+                    <tr><th>Жиры</th><td>${info.percent_of_daily_norm.fats}%</td></tr>
+                    <tr><th>Углеводы</th><td>${info.percent_of_daily_norm.carbohydrates}%</td></tr>
+                </table>
+            </div>
+
+            <div class="modal-section">
+                <h4>Требования ВОЗ:</h4>
+                <table class="requirements-table">
+        `;
+
+        info.requirements.forEach(req => {
+            html += `
+                <tr class="${req.verdict ? 'requirement-met' : 'requirement-not-met'}">
+                    <td>${req.verdict ? '✅' : '❌'}</td>
+                    <td>${req.criterion}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                </table>
+            </div>
+        `;
+
+        modalBody.innerHTML = html;
+        modal.style.display = 'block';
+    }
+
     async function processQueue() {
         if (uploadQueue.length === 0) {
             isProcessing = false;
@@ -184,10 +263,12 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             const data = await response.json();
-            console.log(data.text);
-            const info = JSON.parse(data.text); // тут молимся чтобы было без ```json
 
             if (data.success) {
+                const info = JSON.parse(data.text);
+
+                item.tableRow.dataset.info = data.text;
+
                 updateTableRowStatus(item.tableRow, 'Готово', true);
 
                 const checkSpan = item.tableRow.querySelector('td:last-child span');
