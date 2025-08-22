@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const processingTableBody = document.getElementById('processing-table-body');
     const uploadQueue = [];
     let isProcessing = false;
+    const taskCheckIntervals = new Map();
 
     const modal = document.createElement('div');
     modal.className = 'modal';
@@ -152,58 +153,58 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         return tr;
-}
-
-function updateTableRowStatus(tableRow, status, isSuccess = false) {
-    const statusCell = tableRow.querySelector('.status-cell');
-    const statusSpan = statusCell.querySelector('span');
-    const spinner = statusCell.querySelector('.spinner');
-    const checkSpan = tableRow.querySelector('.check-pending, .check-matched, .check-not-matched');
-
-    statusSpan.className = '';
-    tableRow.className = '';
-
-    switch(status) {
-        case 'В очереди':
-            statusSpan.className = 'status-queued';
-            tableRow.className = 'queued';
-            spinner.style.opacity = '0';
-            if (checkSpan) {
-                checkSpan.className = 'check-pending';
-                checkSpan.textContent = 'В очереди';
-            }
-            break;
-        case 'Обрабатывается...':
-            statusSpan.className = 'status-processing';
-            tableRow.className = 'processing';
-            spinner.style.opacity = '1';
-            if (checkSpan) {
-                checkSpan.className = 'check-pending';
-                checkSpan.textContent = 'Идёт проверка...';
-            }
-            break;
-        case 'Готово':
-            statusSpan.className = 'status-success';
-            tableRow.className = 'success';
-            spinner.style.opacity = '0';
-            if (checkSpan && isSuccess !== undefined) {
-                checkSpan.className = isSuccess ? 'check-matched' : 'check-not-matched';
-                checkSpan.textContent = isSuccess ? 'Соответствует' : 'Не соответствует';
-            }
-            break;
-        case 'Ошибка':
-            statusSpan.className = 'status-error';
-            tableRow.className = 'error';
-            spinner.style.opacity = '0';
-            if (checkSpan) {
-                checkSpan.className = 'check-not-matched';
-                checkSpan.textContent = 'Ошибка проверки';
-            }
-            break;
     }
 
-    statusSpan.textContent = status;
-}
+    function updateTableRowStatus(tableRow, status, isSuccess = false) {
+        const statusCell = tableRow.querySelector('.status-cell');
+        const statusSpan = statusCell.querySelector('span');
+        const spinner = statusCell.querySelector('.spinner');
+        const checkSpan = tableRow.querySelector('.check-pending, .check-matched, .check-not-matched');
+
+        statusSpan.className = '';
+        tableRow.className = '';
+
+        switch(status) {
+            case 'В очереди':
+                statusSpan.className = 'status-queued';
+                tableRow.className = 'queued';
+                spinner.style.opacity = '0';
+                if (checkSpan) {
+                    checkSpan.className = 'check-pending';
+                    checkSpan.textContent = 'В очереди';
+                }
+                break;
+            case 'Обрабатывается...':
+                statusSpan.className = 'status-processing';
+                tableRow.className = 'processing';
+                spinner.style.opacity = '1';
+                if (checkSpan) {
+                    checkSpan.className = 'check-pending';
+                    checkSpan.textContent = 'Идёт проверка...';
+                }
+                break;
+            case 'Готово':
+                statusSpan.className = 'status-success';
+                tableRow.className = 'success';
+                spinner.style.opacity = '0';
+                if (checkSpan && isSuccess !== undefined) {
+                    checkSpan.className = isSuccess ? 'check-matched' : 'check-not-matched';
+                    checkSpan.textContent = isSuccess ? 'Соответствует' : 'Не соответствует';
+                }
+                break;
+            case 'Ошибка':
+                statusSpan.className = 'status-error';
+                tableRow.className = 'error';
+                spinner.style.opacity = '0';
+                if (checkSpan) {
+                    checkSpan.className = 'check-not-matched';
+                    checkSpan.textContent = 'Ошибка проверки';
+                }
+                break;
+        }
+
+        statusSpan.textContent = status;
+    }
 
     function showModal(info) {
         const modalBody = document.getElementById('modal-body');
@@ -255,6 +256,42 @@ function updateTableRowStatus(tableRow, status, isSuccess = false) {
         modal.style.display = 'block';
     }
 
+    async function checkTaskStatus(taskId, tableRow) {
+        try {
+            const response = await fetch(`/task-status/${taskId}`);
+            const data = await response.json();
+
+            if (data.status === 'SUCCESS') {
+                clearInterval(taskCheckIntervals.get(taskId));
+                taskCheckIntervals.delete(taskId);
+
+                tableRow.dataset.info = data.result;
+                updateTableRowStatus(tableRow, 'Готово', true);
+
+                const info = JSON.parse(data.result);
+                const checkSpan = tableRow.querySelector('td:last-child span');
+                if (info.verdict) {
+                    checkSpan.className = 'check-matched';
+                    checkSpan.textContent = 'Соответствует';
+                } else {
+                    checkSpan.className = 'check-not-matched';
+                    checkSpan.textContent = 'Не соответствует';
+                }
+            } else if (data.status === 'FAILURE') {
+                clearInterval(taskCheckIntervals.get(taskId));
+                taskCheckIntervals.delete(taskId);
+
+                updateTableRowStatus(tableRow, 'Ошибка');
+                const checkSpan = tableRow.querySelector('td:last-child span');
+                checkSpan.className = 'check-not-matched';
+                checkSpan.textContent = data.error || 'Ошибка обработки';
+            }
+
+        } catch (error) {
+            console.error('Error checking task status:', error);
+        }
+    }
+
     async function processQueue() {
         if (uploadQueue.length === 0) {
             isProcessing = false;
@@ -282,19 +319,26 @@ function updateTableRowStatus(tableRow, status, isSuccess = false) {
             const data = await response.json();
 
             if (data.success) {
-                const info = JSON.parse(data.text);
+                if (data.status === 'completed') {
+                    item.tableRow.dataset.info = data.text;
+                    updateTableRowStatus(item.tableRow, 'Готово', true);
 
-                item.tableRow.dataset.info = data.text;
+                    const info = JSON.parse(data.text);
+                    const checkSpan = item.tableRow.querySelector('td:last-child span');
+                    if (info.verdict) {
+                        checkSpan.className = 'check-matched';
+                        checkSpan.textContent = 'Соответствует';
+                    } else {
+                        checkSpan.className = 'check-not-matched';
+                        checkSpan.textContent = 'Не соответствует';
+                    }
+                } else if (data.status === 'processing') {
+                    const taskId = data.task_id;
+                    const intervalId = setInterval(() => {
+                        checkTaskStatus(taskId, item.tableRow);
+                    }, 1000);
 
-                updateTableRowStatus(item.tableRow, 'Готово', true);
-
-                const checkSpan = item.tableRow.querySelector('td:last-child span');
-                if (info.verdict) {
-                    checkSpan.className = 'check-matched';
-                    checkSpan.textContent = 'Соответствует';
-                } else {
-                    checkSpan.className = 'check-not-matched';
-                    checkSpan.textContent = 'Не соответствует';
+                    taskCheckIntervals.set(taskId, intervalId);
                 }
             } else {
                 updateTableRowStatus(item.tableRow, 'Ошибка');
@@ -308,6 +352,7 @@ function updateTableRowStatus(tableRow, status, isSuccess = false) {
             const checkSpan = item.tableRow.querySelector('td:last-child span');
             checkSpan.className = 'check-not-matched';
             checkSpan.textContent = 'Ошибка сети';
+            console.log(error);
         }
 
         setTimeout(() => processQueue(), 100);
