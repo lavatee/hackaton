@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
     redis:
         image: redis:alpine
@@ -13,3 +11,23 @@ services:
         depends_on:
             - redis
         env_file: ".env"
+        command: python main.py
+
+    celery_worker:
+        build: ./
+        depends_on:
+            - redis
+            - app
+        env_file: ".env"
+        command: celery -A celery_app worker --loglevel=info
+
+    flower:
+        image: mher/flower
+        ports:
+            - 5555:5555
+        environment:
+            - CELERY_BROKER_URL=redis://redis:6379/0
+            - CELERY_RESULT_BACKEND=redis://redis:6379/0
+        depends_on:
+            - redis
+            - celery_worker
