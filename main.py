@@ -1,125 +1,20 @@
 from flask import Flask, render_template, request, jsonify
-from PIL import Image
-import pytesseract
-import requests
-import hashlib
 import redis
-import time
-import json
-import os
-import re
-
-with open("requirements_for_product.json", "r", encoding="utf-8") as f:
-    WHO_REQS = f.read()
-
-PROMPT = f"""
-проанализируй продукт согласно требованиям ВОЗ:
-{WHO_REQS}
-
-текст на упаковке:
-%text%
-
-выведи в формате json типа
-{{
-    "verdict": true если продукт в целом хороший, иначе false,
-    "category": "только код категории",
-    "g_per_100g": {{
-        "proteins": 12,
-        "fats": 45,
-        "carbohydrates": 78
-    }},
-    "percent_of_daily_norm": {{
-        "proteins": 12,
-        "fats": 34,
-        "carbohydrates": 56
-    }},
-    "requirements": [
-        {{
-            "criterion": "...",
-            "verdict": true если всё хорошо, иначе false
-        }},
-        ...
-    ]
-}}
-
-только json, без комментариев, без markdown, без "```"
-категорию в виде строки (в кавычках)
-g_per_100g это граммы белков/жиров/углеводов на 100г продукта
-percent_of_daily_norm это процент белков/жиров/углеводов от суточной нормы
-в requirements укажи как выполненые так и невыполненые требования
-критерии пиши на русском
-не забывай в строковых значениях ставить обратный слеш перед кавычками
-этот вывод будет парситься через JSON.parse, важно чтобы не получилась ошибка
-"""
+from celery.result import AsyncResult
+from utils import hash_file
+from tasks import process_image_task, celery_app
+from io import BytesIO
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
 cache = redis.Redis(host="redis", port=6379, db=0, decode_responses=True)
 app = Flask(__name__)
 
-
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
-# there's probably some built-in decorator like this
-def exectime(func):
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        retval = func(*args, **kwargs)
-        print(f"{func.__name__} took {time.time() - start_time}s")
-        return retval
-
-    return wrapper
-
-
-@exectime
-def hash_file(file):
-    sha256 = hashlib.sha256()
-
-    for chunk in iter(lambda: file.read(4096), b""):
-        sha256.update(chunk)
-
-    return sha256.hexdigest()
-
-
-@exectime
-def preprocess(file):
-    img = Image.open(file)
-    img = img.resize((img.size[0] * 2, img.size[1] * 2), Image.LANCZOS)  # somehow this improves the ocr accuracy
-    return img
-
-
-@exectime
-def ocr(img):
-    # --oem 2 = Tesseract + LSTM.
-    # --psm 12 = Sparse text with OSD.
-    return pytesseract.image_to_string(img, config="--oem 2 --psm 12", lang="rus")
-
-
-@exectime
-def ai_prompt(text):
-    return requests.post(
-        url="https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": "Bearer " + os.environ["OPENROUTER_TOKEN"],
-            "Content-Type": "application/json"
-        },
-        data=json.dumps({
-            "model": os.environ["OPENROUTER_MODEL"],
-            "messages": [
-                {
-                    "role": "user",
-                    "content": PROMPT.replace("%text%", text)
-                }
-            ]
-        })
-    )
-
 
 @app.route("/")
 def index():
     return render_template("index.html")
-
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
@@ -132,21 +27,26 @@ def upload_file():
 
     if file and allowed_file(file.filename):
         try:
-            sha256 = hash_file(file)
+            file_content = file.read()
+            file_for_hash = BytesIO(file_content)
+            sha256 = hash_file(file_for_hash)
+
             info = cache.get(sha256)
 
             if info is None:
-                response = ai_prompt(ocr(preprocess(file)))
-
-                print(response.text)
-                info = response.json()["choices"][0]["message"]["content"]
-                info = re.search(r"{[\s\S]+}", info).group()  # чудесным образом вычленяем json
-                cache.set(sha256, info)
+                task = process_image_task.delay(sha256, file_content)
+                return jsonify({
+                    "success": True,
+                    "filename": file.filename,
+                    "task_id": task.id,
+                    "status": "processing"
+                }), 202
 
             return jsonify({
                 "success": True,
                 "filename": file.filename,
-                "text": info
+                "text": info,
+                "status": "completed"
             }), 200
 
         except Exception as e:
@@ -161,6 +61,23 @@ def upload_file():
             "filename": file.filename if file else "unknown",
             "error": "File type not allowed"
         }), 400
+
+
+@app.route("/task-status/<task_id>")
+def task_status(task_id):
+    task_result = AsyncResult(task_id, app=celery_app)
+
+    response = {
+        "task_id": task_id,
+        "status": task_result.status,
+    }
+
+    if task_result.status == 'SUCCESS':
+        response["result"] = task_result.result
+    elif task_result.status == 'FAILURE':
+        response["error"] = str(task_result.result)
+
+    return jsonify(response)
 
 
 if __name__ == "__main__":
